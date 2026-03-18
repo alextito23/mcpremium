@@ -1,0 +1,32 @@
+{
+  "name": "bot-mcpremium",
+  "version": "2.0.0",
+  "description": "Advanced Discord bot for invite tracking and role assignment",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "register": "node src/deploy-commands.js"
+  },
+  "keywords": [
+    "discord",
+    "discord-bot",
+    "discord.js",
+    "invites",
+    "roles",
+    "mongodb"
+  ],
+  "author": "Bot Developer",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.9.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "mongoose": "^8.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
