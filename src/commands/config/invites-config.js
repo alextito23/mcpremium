@@ -416,8 +416,8 @@ async function syncInvites(client, interaction, guildId) {
     try {
         await interaction.deferReply({ ephemeral: true });
         
-        const inviteTracker = new InviteTracker(client, guild);
-        await inviteTracker.syncInvites();
+        // Use the exported function directly, not a class instance
+        await InviteTracker.syncInvites(client, guildId);
         
         const embed = successEmbed(
             'Sincronización completada',

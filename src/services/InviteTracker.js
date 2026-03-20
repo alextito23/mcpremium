@@ -108,25 +108,52 @@ async function handleMemberJoin(client, member) {
     let usedCode = null;
     let inviterId = null;
     let isFake = false;
+    let foundInvite = false;
 
-    for (const [code, uses] of newInvites) {
-        if (code.startsWith(`${code}_`)) continue; // Skip metadata keys
+    // If we have old cache, compare to find which invite was used
+    if (oldInvites.size > 0) {
+        for (const [code, uses] of newInvites) {
+            // Skip metadata keys
+            if (code.includes('_inviter') || code.includes('_maxUses') || code.includes('_temporary')) continue;
 
-        const oldUses = oldInvites.get(code) || 0;
-        
-        if (uses > oldUses) {
-            usedCode = code;
-            inviterId = newInvites.get(`${code}_inviter`);
+            const oldUses = oldInvites.get(code) || 0;
             
-            // Check for fake join (temporary invite that was used)
-            const maxUses = newInvites.get(`${code}_maxUses`);
-            const isTemporary = newInvites.get(`${code}_temporary`);
-            
-            if (isTemporary || (maxUses && maxUses === 1)) {
-                isFake = true;
+            if (uses > oldUses) {
+                usedCode = code;
+                inviterId = newInvites.get(`${code}_inviter`);
+                foundInvite = true;
+                
+                // Check for fake join (temporary invite that was used)
+                const maxUses = newInvites.get(`${code}_maxUses`);
+                const isTemporary = newInvites.get(`${code}_temporary`);
+                
+                if (isTemporary || (maxUses && maxUses === 1)) {
+                    isFake = true;
+                }
+                
+                break;
             }
+        }
+    }
+    
+    // If no invite found in cache comparison, try to detect from invite with uses > 0
+    // This handles the case where the bot just started and there's no previous cache
+    if (!foundInvite) {
+        for (const [code, inviteData] of newInvites) {
+            // Skip metadata keys
+            if (code.includes('_inviter') || code.includes('_maxUses') || code.includes('_temporary')) continue;
             
-            break;
+            // Get the actual uses value - it could be a number or the invite object
+            const uses = typeof inviteData === 'number' ? inviteData : (inviteData.uses || 0);
+            
+            // Find invites that have been used (uses > 0)
+            if (uses > 0) {
+                usedCode = code;
+                inviterId = newInvites.get(`${code}_inviter`);
+                foundInvite = true;
+                logger.debug(`Detected invite without cache comparison: ${code} by ${inviterId}`, 'INVITE_TRACKER');
+                break;
+            }
         }
     }
 
@@ -445,14 +472,22 @@ async function getLeaderboard(guildId, limit = 10) {
 async function sendJoinMessage(client, guildId, member, inviterId, inviteCode, isFake) {
     const config = await GuildConfig.getConfig(guildId);
     
-    console.log('[DEBUG] Log channel ID:', config.inviteSystem.logChannelId);
-    
     if (!config.inviteSystem.logChannelId) {
-        console.log('[DEBUG] No log channel configured, skipping join message');
+        logger.debug('No log channel configured, skipping join message', 'INVITE_TRACKER');
         return;
     }
     
-    const channel = client.channels.cache.get(config.inviteSystem.logChannelId);
+    // Try to get channel from cache, or fetch it
+    let channel = client.channels.cache.get(config.inviteSystem.logChannelId);
+    if (!channel) {
+        try {
+            channel = await client.channels.fetch(config.inviteSystem.logChannelId);
+        } catch (err) {
+            logger.error(`Failed to fetch log channel: ${err.message}`, 'INVITE_TRACKER');
+            return;
+        }
+    }
+    
     if (!channel) return;
 
     const inviterMention = inviterId ? `<@${inviterId}>` : 'Desconocido';
@@ -467,6 +502,7 @@ async function sendJoinMessage(client, guildId, member, inviterId, inviteCode, i
 
     try {
         await channel.send({ embeds: [embed] });
+        logger.info(`Join log sent for ${member.user.tag}`, 'INVITE_TRACKER');
     } catch (err) {
         logger.error(`Failed to send join message: ${err.message}`, 'INVITE_TRACKER');
     }
@@ -478,14 +514,22 @@ async function sendJoinMessage(client, guildId, member, inviterId, inviteCode, i
 async function sendLeaveMessage(client, guildId, member, inviterId) {
     const config = await GuildConfig.getConfig(guildId);
     
-    console.log('[DEBUG] Leave log channel ID:', config.inviteSystem.logChannelId);
-    
     if (!config.inviteSystem.logChannelId) {
-        console.log('[DEBUG] No log channel configured, skipping leave message');
+        logger.debug('No log channel configured, skipping leave message', 'INVITE_TRACKER');
         return;
     }
     
-    const channel = client.channels.cache.get(config.inviteSystem.logChannelId);
+    // Try to get channel from cache, or fetch it
+    let channel = client.channels.cache.get(config.inviteSystem.logChannelId);
+    if (!channel) {
+        try {
+            channel = await client.channels.fetch(config.inviteSystem.logChannelId);
+        } catch (err) {
+            logger.error(`Failed to fetch log channel: ${err.message}`, 'INVITE_TRACKER');
+            return;
+        }
+    }
+    
     if (!channel) return;
 
     const inviterMention = inviterId ? `<@${inviterId}>` : 'Desconocido';
@@ -494,6 +538,7 @@ async function sendLeaveMessage(client, guildId, member, inviterId) {
 
     try {
         await channel.send({ embeds: [embed] });
+        logger.info(`Leave log sent for ${member.user.tag}`, 'INVITE_TRACKER');
     } catch (err) {
         logger.error(`Failed to send leave message: ${err.message}`, 'INVITE_TRACKER');
     }

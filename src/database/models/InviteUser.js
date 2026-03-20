@@ -78,8 +78,9 @@ const inviteUserSchema = new mongoose.Schema({
 inviteUserSchema.index({ guildId: 1, userId: 1 }, { unique: true, sparse: true });
 
 // Virtual for total invites
+// Total = regular invites + bonus invites (fakes and lefts are tracked separately but don't reduce the count)
 inviteUserSchema.virtual('totalInvites').get(function() {
-    return Math.max(0, (this.regularInvites || 0) + (this.bonusInvites || 0) - (this.fakeJoins || 0) - (this.left || 0));
+    return Math.max(0, (this.regularInvites || 0) + (this.bonusInvites || 0));
 });
 
 // Ensure virtuals are included in JSON

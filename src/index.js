@@ -79,8 +79,8 @@ async function init() {
         
         await client.login(token);
         
-        // Initialize invite tracking for all guilds
-        await initializeInviteTracking(client);
+        // Note: Invite tracking is initialized in the ready event
+        // See src/events/ready.js
         
         logger.success('Bot initialized successfully!', 'STARTUP');
         
@@ -105,6 +105,8 @@ async function initializeInviteTracking(client) {
         return;
     }
     
+    logger.info('Initializing invite tracking for all guilds...', 'INVITE_TRACKING');
+    
     // For each guild, fetch and cache invites
     for (const [guildId, guild] of client.guilds.cache) {
         try {
@@ -123,55 +125,12 @@ async function initializeInviteTracking(client) {
             client.checkIntervals.set(guildId, interval);
             logger.info(`Invite tracking initialized for guild ${guild.name}`, 'INVITE_TRACKING');
             
-            // Send test log message
-            try {
-                const GuildConfig = require('./database/models/GuildConfig');
-                const config = await GuildConfig.getConfig(guildId);
-                console.log('[TEST] Log channel ID:', config.inviteSystem.logChannelId);
-                if (config.inviteSystem.logChannelId) {
-                    const channel = client.channels.cache.get(config.inviteSystem.logChannelId);
-                    console.log('[TEST] Channel found:', !!channel);
-                    if (channel) {
-                        const { EmbedBuilder } = require('discord.js');
-                        const testEmbed = new EmbedBuilder()
-                            .setColor(0x57F287)
-                            .setTitle('✅ Sistema de logs activo')
-                            .setDescription('El sistema de logging de invitaciones está funcionando correctamente.')
-                            .addFields(
-                                { name: '📊 Canal', value: `Logs se enviarán a este canal`, inline: true }
-                            )
-                            .setTimestamp();
-                        await channel.send({ embeds: [testEmbed] });
-                        logger.success(`Test log message sent to channel ${config.inviteSystem.logChannelId}`, 'STARTUP');
-                    } else {
-                        console.log('[TEST] Channel not found in cache. Attempting to fetch...');
-                        try {
-                            const fetchedChannel = await client.channels.fetch(config.inviteSystem.logChannelId);
-                            console.log('[TEST] Fetched channel:', !!fetchedChannel);
-                            if (fetchedChannel) {
-                                const { EmbedBuilder } = require('discord.js');
-                                const testEmbed = new EmbedBuilder()
-                                    .setColor(0x57F287)
-                                    .setTitle('✅ Sistema de logs activo')
-                                    .setDescription('El sistema de logging de invitaciones está funcionando correctamente.')
-                                    .setTimestamp();
-                                await fetchedChannel.send({ embeds: [testEmbed] });
-                                logger.success(`Test log message sent (fetched) to channel ${config.inviteSystem.logChannelId}`, 'STARTUP');
-                            }
-                        } catch (fetchErr) {
-                            console.log('[TEST] Failed to fetch channel:', fetchErr.message);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.log('[TEST] Failed to send test log:', err.message);
-                logger.error(`Failed to send test log: ${err.message}`, 'STARTUP');
-            }
-            
         } catch (err) {
             logger.error(`Failed to initialize invite tracking for guild ${guildId}: ${err.message}`, 'INVITE_TRACKING');
         }
     }
+    
+    logger.success('Invite tracking initialization complete!', 'INVITE_TRACKING');
 }
 
 /**

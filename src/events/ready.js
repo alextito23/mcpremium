@@ -4,6 +4,8 @@
  */
 
 const logger = require('../utils/logger');
+const InviteTracker = require('../services/InviteTracker');
+const GuildConfig = require('../database/models/GuildConfig');
 
 /**
  * Handle the ready event
@@ -46,6 +48,60 @@ async function execute(client) {
     const inviteEnabled = process.env.INVITE_SYSTEM_ENABLED === 'true';
     const checkInterval = process.env.CHECK_INTERVAL_MINUTES || 5;
     logger.info(`Invite system: ${inviteEnabled ? 'Enabled' : 'Disabled'} (check every ${checkInterval} min)`, 'READY');
+    
+    // Initialize invite tracking for all guilds
+    if (inviteEnabled) {
+        await initializeInviteTracking(client);
+    }
+}
+
+/**
+ * Initialize invite tracking for all guilds
+ * @param {Client} client - Discord client
+ */
+async function initializeInviteTracking(client) {
+    const checkInterval = parseInt(process.env.CHECK_INTERVAL_MINUTES) || 5;
+    const intervalMs = checkInterval * 60 * 1000;
+    
+    logger.info('Initializing invite tracking for all guilds...', 'READY');
+    
+    for (const [guildId, guild] of client.guilds.cache) {
+        try {
+            // Fetch and cache invites for this guild
+            await InviteTracker.fetchAndCacheInvites(guild);
+            logger.info(`Cached invites for guild: ${guild.name}`, 'READY');
+            
+            // Send test log message
+            try {
+                const config = await GuildConfig.getConfig(guildId);
+                if (config.inviteSystem.logChannelId && config.inviteSystem.enabled) {
+                    let channel = client.channels.cache.get(config.inviteSystem.logChannelId);
+                    if (!channel) {
+                        channel = await client.channels.fetch(config.inviteSystem.logChannelId);
+                    }
+                    
+                    if (channel) {
+                        const { EmbedBuilder } = require('discord.js');
+                        const testEmbed = new EmbedBuilder()
+                            .setColor(0x57F287)
+                            .setTitle('✅ Sistema de logs activo')
+                            .setDescription('El sistema de logging de invitaciones está funcionando correctamente.')
+                            .setTimestamp();
+                        
+                        await channel.send({ embeds: [testEmbed] });
+                        logger.success(`Test log message sent to guild: ${guild.name}`, 'READY');
+                    }
+                }
+            } catch (logErr) {
+                logger.warn(`Could not send test log for guild ${guild.name}: ${logErr.message}`, 'READY');
+            }
+            
+        } catch (err) {
+            logger.error(`Failed to initialize invite tracking for guild ${guildId}: ${err.message}`, 'READY');
+        }
+    }
+    
+    logger.success('Invite tracking initialization complete!', 'READY');
 }
 
 module.exports = {
